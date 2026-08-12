@@ -15,7 +15,7 @@ const config = {
   server: {
     ip: "mc.reborncraft.pw",
     port: 25565,
-    version: "1.19.3"
+    version: "1.21.6"
   },
   utils: {
     autoAuth: {
