@@ -13,7 +13,7 @@ const config = {
     type: "legacy"
   },
   server: {
-    ip: "play.projects.gg",
+    ip: "mc.reborncraft.pw",
     port: 25565,
     version: "1.19.3"
   },
@@ -25,14 +25,14 @@ const config = {
     chatMessages: {
       enabled: true,
       messages: [      
-        { text: "/g fake3", delay: 10 },
-        { text: "/gaia", delay: 10 },
-        { text: "/home", delay: 30 },                  
-        { text: "/kit yemek", delay: 500 }
+        { text: "/login fake3", delay: 10 },
+        { text: "/skyblock", delay: 10 },
+        { text: "/is go EymanBey", delay: 10 },                  
+        { text: "/is go EymanBey", delay: 500 }
       ]
     },
     antiAfk: {
-      enabled: false
+      enabled: true
     },
     autoReconnect: true,
     autoReconnectDelay: 5000
