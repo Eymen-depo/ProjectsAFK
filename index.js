@@ -65,7 +65,7 @@ function startBot() {
     botConnected = true;
 
     if (config.utils.autoAuth.enabled) {
-      bot.chat(`/g ${config.utils.autoAuth.password}`);
+      bot.chat(`/login ${config.utils.autoAuth.password}`);
       console.log(`Otomatik giriş: /g ${config.utils.autoAuth.password}`);
     }
 
