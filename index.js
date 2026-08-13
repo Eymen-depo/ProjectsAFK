@@ -3,9 +3,9 @@ const express = require('express');
 const app = express();
 const port = process.env.PORT || 3000;
 
-let botConnected = false; // Bot bağlantı durumu
+let botConnected = false;
+let timers = []; // Aktif zamanlayıcıları takip etmek için array
 
-// Bot yapılandırma ayarları
 const config = {
   botAccount: {
     username: "Witcher_",
@@ -24,10 +24,10 @@ const config = {
     },
     chatMessages: {
       enabled: true,
-      messages: [      
+      messages: [     
         { text: "/login fake3", delay: 10 },
         { text: "/skyblock", delay: 10 },
-        { text: "/is go EymanBey", delay: 10 },                  
+        { text: "/is go EymanBey", delay: 10 },                 
         { text: "/is go EymanBey", delay: 500 }
       ]
     },
@@ -36,20 +36,34 @@ const config = {
     },
     autoReconnect: true,
     autoReconnectDelay: 5000
-  },
-  position: {
-    enabled: true,
-    x: 100,
-    y: 64,
-    z: 100
-  },
-  chatLog: true
+  }
 };
 
 let bot;
 
-// Bot başlatma fonksiyonu
+// Güvenli mesaj gönderme fonksiyonu
+function safeChat(message) {
+  if (bot && bot._client && typeof bot._client.chat === 'function') {
+    try {
+      bot.chat(message);
+      console.log(`Gönderildi: ${message}`);
+    } catch (err) {
+      console.error(`Mesaj gönderilirken hata oluştu: ${err.message}`);
+    }
+  } else {
+    console.log(`[Atlandı] Bot bağlı değil veya chat henüz hazır değil: ${message}`);
+  }
+}
+
+// Tüm zamanlayıcıları temizleme fonksiyonu
+function clearAllTimers() {
+  timers.forEach(timer => clearTimeout(timer));
+  timers = [];
+}
+
 function startBot() {
+  clearAllTimers(); // Önceki oturumdan kalan tüm zamanlayıcıları temizle
+
   bot = mineflayer.createBot({
     host: config.server.ip,
     port: config.server.port,
@@ -59,53 +73,72 @@ function startBot() {
     auth: config.botAccount.type
   });
 
-  // Bot olay dinleyicileri
   bot.on('spawn', () => {
-    console.log('Bot bağlandı!');
+    console.log('Bot oyuna giriş yaptı!');
     botConnected = true;
 
+    // Otomatik Giriş
     if (config.utils.autoAuth.enabled) {
-      bot.chat(`/login ${config.utils.autoAuth.password}`);
-      console.log(`Otomatik giriş: /g ${config.utils.autoAuth.password}`);
+      safeChat(`/login ${config.utils.autoAuth.password}`);
     }
 
-    // Mesaj gönderme işlevi
+    // Sıralı Mesaj Gönderimi
     if (config.utils.chatMessages.enabled) {
-      config.utils.chatMessages.messages.forEach((messageObj, index) => {
-        setInterval(() => {
-          bot.chat(messageObj.text);
-          console.log(`Gönderildi: ${messageObj.text}`);
+      config.utils.chatMessages.messages.forEach((messageObj) => {
+        const timer = setTimeout(() => {
+          safeChat(messageObj.text);
         }, messageObj.delay * 1000);
+        timers.push(timer);
       });
     }
 
-    // Anti-AFK işlevi
+    // Anti-AFK Döngüsü
     if (config.utils.antiAfk.enabled) {
-      setInterval(() => {
+      const runAntiAfk = () => {
+        if (!botConnected) return;
+
         const moveDirections = ['forward', 'back', 'left', 'right'];
         const randomDirection = moveDirections[Math.floor(Math.random() * moveDirections.length)];
-        
-        // Rastgele bir yön seç ve kısa süre hareket et
-        bot.setControlState(randomDirection, true);
-        setTimeout(() => {
-          bot.setControlState(randomDirection, false);
-        }, 100); // 0.5 saniye hareket et
-        
-        console.log(`Bot ${randomDirection} yönüne hareket etti.`);
-      }, 30000); // Her 10 saniyede bir hareket et
+
+        try {
+          bot.setControlState(randomDirection, true);
+          const stopTimer = setTimeout(() => {
+            if (bot) bot.setControlState(randomDirection, false);
+          }, 100);
+          timers.push(stopTimer);
+
+          console.log(`Bot ${randomDirection} yönüne hareket etti.`);
+        } catch (err) {
+          console.error(`Anti-AFK hatası: ${err.message}`);
+        }
+
+        // Bir sonraki hareketi 30 saniye sonra planla
+        const nextAfkTimer = setTimeout(runAntiAfk, 30000);
+        timers.push(nextAfkTimer);
+      };
+
+      const initialAfkTimer = setTimeout(runAntiAfk, 30000);
+      timers.push(initialAfkTimer);
     }
   });
 
-  // Sohbet mesajlarını dinleme
   bot.on('message', (message) => {
     console.log(message.toString());
   });
 
-  // Bağlantı kesildiğinde yeniden bağlanma
+  bot.on('error', (err) => {
+    console.error('Bot Hatası:', err.message);
+  });
+
   bot.on('end', () => {
-    console.log('Bot bağlantısı kesildi. Yeniden bağlanacak...');
+    console.log('Bot bağlantısı kesildi. Zamanlayıcılar temizleniyor...');
     botConnected = false;
-    setTimeout(startBot, config.utils.autoReconnectDelay); // Botu yeniden başlat
+    clearAllTimers();
+
+    if (config.utils.autoReconnect) {
+      console.log(`${config.utils.autoReconnectDelay / 1000} saniye sonra yeniden bağlanılacak...`);
+      setTimeout(startBot, config.utils.autoReconnectDelay);
+    }
   });
 }
 
@@ -115,13 +148,12 @@ startBot();
 // Web sunucusu
 app.get('/', (req, res) => {
   if (botConnected) {
-    res.send('Bot başarıyla bağlandı ve sohbetleri dinliyor.');
+    res.send('Bot başarıyla bağlandı ve aktif.');
   } else {
     res.send('Bot bağlantı kurmaya çalışıyor...');
   }
 });
 
-// Sunucu bağlantısını başlat
 app.listen(port, () => {
-  console.log(`Sunucu ${port} numaralı bağlantı noktasında yürütülüyor.`);
+  console.log(`Sunucu ${port} portunda çalışıyor.`);
 });
